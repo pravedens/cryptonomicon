@@ -176,7 +176,6 @@
 <script>
 export default {
   name: "App",
-
   data() {
     return {
       ticker: "",
@@ -187,30 +186,24 @@ export default {
       filter: "",
     };
   },
-
   created() {
     const windowData = Object.fromEntries(
       new URL(window.location).searchParams.entries()
     );
 
     const VALID_KEYS = ["filter", "page"];
-
     VALID_KEYS.forEach((key) => {
       if (windowData[key]) {
         this[key] = windowData[key];
       }
     });
-
     //if (windowData.filter) {
     //  this.filter = windowData.filter;
     //}
-
     //if (windowData.page) {
     //  this.page = windowData.page;
     //}
-
     const tickersData = localStorage.getItem("microeconomic-list");
-
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
       this.tickers.forEach((ticker) => {
@@ -218,41 +211,32 @@ export default {
       });
     }
   },
-
   computed: {
     startIndex() {
       return (this.page - 1) * 6;
     },
-
     endIndex() {
       return this.page * 6;
     },
-
     filteredTickers() {
       return this.tickers.filter((ticker) => ticker.name.includes(this.filter));
     },
-
     paginatedTickers() {
       return this.filteredTickers.slice(this.startIndex, this.endIndex);
     },
-
     hasNextPage() {
       return this.filteredTickers.length > this.endIndex;
     },
-
     normalizedGraph() {
       const maxValue = Math.max(...this.graph);
       const minValue = Math.min(...this.graph);
-
       if (maxValue === minValue) {
         return this.graph.map(() => 50);
       }
-
       return this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
     },
-
     pageStateOptions() {
       return {
         filter: this.filter,
@@ -260,40 +244,33 @@ export default {
       };
     },
   },
-
   methods: {
     subscribeToUpdates(tickerName) {
       setInterval(async () => {
         const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=4f95a422608fd308a2dbf27d6d12ef9e7252063e299de9bed15d93b01befe33e`
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=9522b7799b2a85f3a42a0dd549e8604152d47246fb47599b5683d2d1a19681a9`
         );
         const data = await f.json();
         this.tickers.find((t) => t.name === tickerName).price =
           data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
-
         if (this.selectedTicker?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 5000);
       this.ticker = "";
     },
-
     add() {
       const currentTicker = {
         name: this.ticker,
         price: "_",
       };
-
       this.tickers = [...this.tickers, currentTicker];
       this.filter = "";
-
       this.subscribeToUpdates(currentTicker.name);
     },
-
     select(ticker) {
       this.selectedTicker = ticker;
     },
-
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
       if (this.selectedTicker === tickerToRemove) {
@@ -320,6 +297,7 @@ export default {
     filter() {
       this.page = 1;
     },
+
     pageStateOptions(value) {
       window.history.pushState(
         null,
