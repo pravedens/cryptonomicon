@@ -1,11 +1,12 @@
 <template>
   <div class="container mx-auto flex flex-col items-center bg-gray-100 p-4">
     <div class="container">
+      <div class="w-full my-4"></div>
       <section>
         <div class="flex">
           <div class="max-w-xs">
             <label for="wallet" class="block text-sm font-medium text-gray-700"
-              >Тикер {{ ticker }}</label
+              >Тикер</label
             >
             <div class="mt-1 relative rounded-md shadow-md">
               <input
@@ -18,31 +19,6 @@
                 placeholder="Например DOGE"
               />
             </div>
-            <div
-              class="flex bg-white shadow-md p-1 rounded-md shadow-md flex-wrap"
-            >
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BTC
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                DOGE
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                BCH
-              </span>
-              <span
-                class="inline-flex items-center px-2 m-1 rounded-md text-xs font-medium bg-gray-300 text-gray-800 cursor-pointer"
-              >
-                CHD
-              </span>
-            </div>
-            <div class="text-sm text-red-600">Такой тикер уже добавлен</div>
           </div>
         </div>
         <button
@@ -66,6 +42,7 @@
           Добавить
         </button>
       </section>
+
       <template v-if="tickers.length">
         <hr class="w-full border-t border-gray-600 my-4" />
         <div>
@@ -78,8 +55,8 @@
           </button>
           <button
             class="my-4 mx-2 inline-flex items-center py-2 px-4 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-full text-white bg-gray-600 hover:bg-gray-700 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-            v-if="hasNextPage"
             @click="page = page + 1"
+            v-if="hasNextPage"
           >
             Вперед
           </button>
@@ -131,7 +108,10 @@
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
           {{ selectedTicker.name }} - USD
         </h3>
-        <div class="flex items-end border-gray-600 border-b border-l h-64">
+        <div
+          class="flex items-end border-gray-600 border-b border-l h-64"
+          ref="graph"
+        >
           <div
             v-for="(bar, idx) in normalizedGraph"
             :key="idx"
@@ -156,8 +136,6 @@
             viewBox="0 0 511.76 511.76"
             style="enable-background: new 0 0 512 512"
             xml:space="preserve"
-            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-            xsi:schemaLocation="http://svgjs.com/svgjs "
           >
             <g>
               <path
@@ -174,18 +152,40 @@
 </template>
 
 <script>
-import { loadTickers } from "@/api";
+// H - homework - домашнее задание
+
+// [x] 6. Наличие в состоянии ЗАВИСИМЫХ ДАННЫХ | Критичность: 5+
+// [x] 4. Запросы напрямую внутри компонента (???) | Критичность: 5
+// [x] 2. При удалении остается подписка на загрузку тикера | Критичность: 5
+// [H] 5. Обработка ошибок API | Критичность: 5
+// [х] 3. Количество запросов | Критичность: 4
+// [x] 8. При удалении тикера не изменяется localStorage | Критичность: 4
+// [x] 1. Одинаковый код в watch | Критичность: 3
+// [ ] 9. localStorage и анонимные вкладки | Критичность: 3
+// [x] 7. График ужасно выглядит если будет много цен | Критичность: 2
+// [ ] 10. Магические строки и числа (URL, 5000 миллисекунд задержки, ключ локал стораджа, количество на странице) |  Критичность: 1
+
+// Параллельно
+// [x] График сломан если везде одинаковые значения
+// [x] При удалении тикера остается выбор
+
+import { subscribeToTicker, unsubscribeFromTicker } from "./api";
 
 export default {
   name: "App",
+
   data() {
     return {
       ticker: "",
+      filter: "",
+
       tickers: [],
       selectedTicker: null,
+
       graph: [],
+      maxGraphElements: 1,
+
       page: 1,
-      filter: "",
     };
   },
 
@@ -195,50 +195,77 @@ export default {
     );
 
     const VALID_KEYS = ["filter", "page"];
+
     VALID_KEYS.forEach((key) => {
       if (windowData[key]) {
         this[key] = windowData[key];
       }
     });
-    //if (windowData.filter) {
-    //  this.filter = windowData.filter;
-    //}
-    //if (windowData.page) {
-    //  this.page = windowData.page;
-    //}
+
+    // if (windowData.filter) {
+    //   this.filter = windowData.filter;
+    // }
+
+    // if (windowData.page) {
+    //   this.page = windowData.page;
+    // }
+
     const tickersData = localStorage.getItem("microeconomic-list");
+
     if (tickersData) {
       this.tickers = JSON.parse(tickersData);
+      this.tickers.forEach((ticker) => {
+        subscribeToTicker(ticker.name, (newPrice) =>
+          this.updateTicker(ticker.name, newPrice)
+        );
+      });
     }
 
     setInterval(this.updateTickers, 5000);
   },
+
+  mounted() {
+    window.addEventListener("resize", this.calculateMaxGraphElements);
+  },
+
+  beforeUnmount() {
+    window.removeEventListener("resize", this.calculateMaxGraphElements);
+  },
+
   computed: {
     startIndex() {
       return (this.page - 1) * 6;
     },
+
     endIndex() {
       return this.page * 6;
     },
+
     filteredTickers() {
       return this.tickers.filter((ticker) => ticker.name.includes(this.filter));
     },
+
     paginatedTickers() {
       return this.filteredTickers.slice(this.startIndex, this.endIndex);
     },
+
     hasNextPage() {
       return this.filteredTickers.length > this.endIndex;
     },
+
     normalizedGraph() {
       const maxValue = Math.max(...this.graph);
       const minValue = Math.min(...this.graph);
+
       if (maxValue === minValue) {
         return this.graph.map(() => 50);
       }
+
       return this.graph.map(
         (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
       );
     },
+
     pageStateOptions() {
       return {
         filter: this.filter,
@@ -246,7 +273,30 @@ export default {
       };
     },
   },
+
   methods: {
+    calculateMaxGraphElements() {
+      if (!this.$refs.graph) {
+        return;
+      }
+
+      this.maxGraphElements = this.$refs.graph.clientWidth / 38;
+    },
+
+    updateTicker(tickerName, price) {
+      this.tickers
+        .filter((t) => t.name === tickerName)
+        .forEach((t) => {
+          if (t === this.selectedTicker) {
+            this.graph.push(price);
+            while (this.graph.length > this.maxGraphElements) {
+              this.graph.shift();
+            }
+          }
+          t.price = price;
+        });
+    },
+
     formatPrice(price) {
       if (price === "-") {
         return price;
@@ -254,34 +304,30 @@ export default {
       return price > 1 ? price.toFixed(2) : price.toPrecision(2);
     },
 
-    async updateTickers() {
-      if (!this.tickers.length) {
-        return;
-      }
-      const exchangeData = await loadTickers(this.tickers.map((t) => t.name));
-
-      this.tickers.forEach((ticker) => {
-        const price = exchangeData[ticker.name.toUpperCase()];
-        ticker.price = price ?? "-";
-      });
-    },
-
     add() {
       const currentTicker = {
         name: this.ticker,
-        price: "_",
+        price: "-",
       };
+
       this.tickers = [...this.tickers, currentTicker];
+      this.ticker = "";
       this.filter = "";
+      subscribeToTicker(currentTicker.name, (newPrice) =>
+        this.updateTicker(currentTicker.name, newPrice)
+      );
     },
+
     select(ticker) {
       this.selectedTicker = ticker;
     },
+
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
       if (this.selectedTicker === tickerToRemove) {
         this.selectedTicker = null;
       }
+      unsubscribeFromTicker(tickerToRemove.name);
     },
   },
 
@@ -290,7 +336,9 @@ export default {
       this.graph = [];
     },
 
-    tickers() {
+    tickers(newValue, oldValue) {
+      // Почему не сработал watch при добавлении?
+      console.log(newValue === oldValue);
       localStorage.setItem("microeconomic-list", JSON.stringify(this.tickers));
     },
 
